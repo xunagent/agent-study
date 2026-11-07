@@ -4,6 +4,8 @@
 
 Python 3.12.12 上 20 个流程测试通过；Skill frontmatter 校验与两个示例 JSON 校验通过。SVG 已本地渲染并检查；飞书画板的实际渲染仍待授权后确认。系统默认 Python 3.9.6 不满足最低版本，已使用安装的 Python 3.12 执行验收。
 
+[GitHub Actions 首次运行](https://github.com/xunagent/agent-study/actions/runs/42358724593) 已通过 Python 3.10 / 3.12 / 3.14 矩阵测试。
+
 | 范围 | 当前证据 |
 | --- | --- |
 | 学习状态、同日复用、未读拦截 | 本地模拟远端流程测试 |
