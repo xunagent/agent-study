@@ -1,0 +1,101 @@
+{
+  "title": "ReAct：把推理与环境反馈接成循环",
+  "summary": "入门示例，展示学习文档的结构。理解 Agent 为什么需要在行动后重新判断；实际每日正文应扩展到约 1500～2500 个中文字。",
+  "recommendation": "先理解执行循环，再学习工具协议、记忆和规划，能看清后续模块接在什么位置。",
+  "source": {
+    "kind": "paper",
+    "url": "https://arxiv.org/abs/2210.03629v3",
+    "title": "ReAct: Synergizing Reasoning and Acting in Language Models",
+    "authors": "Shunyu Yao et al.",
+    "version": "v3",
+    "accessed_at": "2026-11-07",
+    "locator": "Sections 2–3; Table 1",
+    "reading_scope": "relevant_sections"
+  },
+  "topics": [
+    "执行循环",
+    "工具调用"
+  ],
+  "sections": {
+    "why": "这份笔记从一次行动如何改变下一次决策开始。你只需要知道：语言模型根据输入生成输出，工具则能读取或改变外部环境。这里的循环是后续学习上下文、终止条件和评测的共同基础。",
+    "problem": "教学场景：一个助手需要判断两项资料是否相互矛盾。它可以先写出一个看似完整的答案，但答案未必来自实际资料；也可以不断调用搜索，却不知道哪些结果足以回答问题。设计时需要把待验证的问题、获得的证据和下一步行动联系起来。",
+    "claims": "作者提出让语言推理与任务动作交错生成。推理更新上下文而不直接改变环境；动作取得外部反馈，再影响之后的判断。这是论文提出的方法，不意味着任何使用工具的系统都准确复现了 ReAct。",
+    "solution": "模型读取任务与历史，生成推理或动作。外部控制程序执行动作，将观察结果放回上下文，继续生成，直到终止。论文在推理任务中使用密集的思考—行动—观察序列，在决策任务中允许思考稀疏出现。因此图中回路表达的是反馈关系，不要求所有任务每一步都输出同样格式的文字。",
+    "evidence": "论文 Table 1 在 PaLM-540B 的设定中报告：HotpotQA 上 ReAct 的 EM 为 27.4，CoT 为 29.4；FEVER 上 ReAct 的准确率为 60.9，CoT 为 56.3。它并非在所有任务上都优于 CoT。检索不成功、循环重复和推理错误仍会导致失败；旧基准结果不能直接证明当前模型和真实业务中的收益。",
+    "application": "教学建议：先做一个只读资料的最小助手，记录每次工具输入、结果和终止原因。准备一些答案明确的问题，分别运行直接回答、固定检索流程和反馈循环，比较正确率、耗时与工具次数。预算、权限和异常处理是工程补充，需要另行设计。不要因为系统能重复调用模型，就认为已经具备可靠的任务完成能力。"
+  },
+  "diagram": {
+    "nodes": [
+      {
+        "id": "context",
+        "label": "任务与历史上下文"
+      },
+      {
+        "id": "decision",
+        "label": "模型生成推理或动作"
+      },
+      {
+        "id": "tool",
+        "label": "控制程序执行外部动作"
+      },
+      {
+        "id": "observation",
+        "label": "环境观察写回上下文"
+      },
+      {
+        "id": "finish",
+        "label": "输出答案或停止原因"
+      }
+    ],
+    "edges": [
+      {
+        "from": "context",
+        "to": "decision"
+      },
+      {
+        "from": "decision",
+        "to": "tool",
+        "label": "外部动作"
+      },
+      {
+        "from": "tool",
+        "to": "observation"
+      },
+      {
+        "from": "observation",
+        "to": "decision",
+        "label": "继续"
+      },
+      {
+        "from": "decision",
+        "to": "finish",
+        "label": "完成"
+      },
+      {
+        "from": "decision",
+        "to": "context",
+        "label": "仅推理"
+      }
+    ]
+  },
+  "pseudocode": {
+    "basis": "teaching_reconstruction",
+    "explanation": "用事件循环表达论文机制；步数预算、结构化解析和停止报告是教学中的工程补充，不是原文代码。",
+    "code": "context = [task, demonstrations]\nfor step in range(step_budget):\n    event = model.generate(context)\n    if event.kind == 'finish':\n        return event.answer\n    context.append(event)\n    if event.kind == 'action':\n        observation = environment.execute(event.action)\n        context.append(observation)\nreturn report_incomplete(context)"
+  },
+  "references": [
+    {
+      "url": "https://arxiv.org/html/2210.03629v3#S2",
+      "locator": "Section 2",
+      "basis": "author_claim",
+      "claim": "推理与动作交错，推理改变上下文，动作得到环境反馈。"
+    },
+    {
+      "url": "https://arxiv.org/html/2210.03629v3#S3.T1",
+      "locator": "Section 3.3, Table 1",
+      "basis": "reported_evidence",
+      "claim": "同一 PaLM-540B 实验条件下，ReAct 与 CoT 在两个任务上各有优劣。"
+    }
+  ],
+  "reviewed": true
+}

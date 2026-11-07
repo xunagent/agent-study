@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.DS_Store
+.env
+.env.*
+config.json
+recovery.json
+run.lock
+previews/
+.local/
+private/
+dist/
+*.log
+*.egg-info/
+.pytest_cache/

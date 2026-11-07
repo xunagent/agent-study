@@ -1,0 +1,38 @@
+{
+  "title": "Claude Code：围绕工具结果继续执行",
+  "summary": "官方模块结构示例：理解模型、工具和外围运行程序的分工。此示例短于正式的 10 分钟学习笔记。",
+  "recommendation": "与 ReAct 的反馈循环对照，理解公开产品说明如何映射到应用架构。",
+  "source": {
+    "kind": "official_doc",
+    "url": "https://code.claude.com/docs/en/how-claude-code-works#the-agentic-loop",
+    "title": "How Claude Code works — The agentic loop",
+    "authors": "Anthropic",
+    "version": "accessed-2026-11-07",
+    "accessed_at": "2026-11-07",
+    "locator": "The agentic loop; Tools",
+    "reading_scope": "relevant_sections"
+  },
+  "topics": ["执行循环", "工程可靠性"],
+  "sections": {
+    "why": "读过反馈循环后，可以用一个实际产品来检查理解：哪些决定来自模型，哪些动作必须由外围程序完成？这也是从概念走向应用开发时需要划清的边界。",
+    "problem": "教学场景：修复一个测试失败的函数。仅生成补丁无法知道修复是否有效；执行测试又必须依赖程序运行环境。系统需要把读取文件、修改代码、执行检查得到的信息重新送入决策过程。",
+    "claims": "官方说明用收集上下文、行动、验证三个阶段描述循环，阶段可以交错。模型做出决策，工具执行动作；Claude Code 的外围运行层提供工具并管理模型所见上下文。这是文档公开的行为描述，不是内部调度器源码证明。",
+    "solution": "官方列出的工具能力涵盖文件操作、搜索、执行、Web 和代码智能；工具返回的信息会影响之后的决策。图和伪代码是对这些公开描述的教学抽象。它们没有声称产品内部恰好采用这些函数、状态字段或固定阶段顺序。",
+    "evidence": "本材料是产品机制说明，没有提供与其他 Agent 的对照实验。因此不能从文档推导成功率优势、延迟成本或具体调度算法。闭源内部实现保持未知；实际行为还取决于模型、权限和宿主环境。",
+    "application": "教学建议：实现一个修复小型测试的练习程序，将工具定义与执行函数分开。工具层返回真实的退出码和输出片段，控制层记录动作与结果，模型层决定下一步。比较失败原因时，区分模型选择错误、工具执行失败、验证条件不足。这个拆分是学习设计，不应标注成 Anthropic 的内部实现。"
+  },
+  "diagram": {
+    "nodes": [{"id": "task", "label": "用户任务与当前上下文"}, {"id": "model", "label": "模型决定下一步"}, {"id": "tool", "label": "工具收集信息或执行动作"}, {"id": "result", "label": "结果回到上下文"}, {"id": "answer", "label": "汇报完成结果"}],
+    "edges": [{"from": "task", "to": "model"}, {"from": "model", "to": "tool"}, {"from": "tool", "to": "result"}, {"from": "result", "to": "model", "label": "继续验证"}, {"from": "model", "to": "answer", "label": "完成"}]
+  },
+  "pseudocode": {
+    "basis": "teaching_reconstruction",
+    "explanation": "依据公开文档的教学模型，不是 Claude Code 内部源码；预算和权限检查是练习程序的设计。",
+    "code": "context = initialize(task)\nwhile budget.remaining():\n    decision = model.next(context, tool_definitions)\n    if decision.is_final:\n        return decision.summary\n    permission.check(decision.tool_call)\n    result = tools.execute(decision.tool_call)\n    context.add(decision.tool_call, result)\nreturn incomplete_report(context)"
+  },
+  "references": [
+    {"url": "https://code.claude.com/docs/en/how-claude-code-works#the-agentic-loop", "locator": "The agentic loop", "basis": "author_claim", "claim": "官方描述的循环由收集上下文、行动、验证构成，阶段可以交错。"},
+    {"url": "https://code.claude.com/docs/en/how-claude-code-works#tools", "locator": "Tools", "basis": "author_claim", "claim": "工具执行并将结果反馈给后续决策。"}
+  ],
+  "reviewed": true
+}

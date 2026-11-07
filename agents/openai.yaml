@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agent Study"
+  short_description: "循序学习 Agent 论文与官方模块，将原理图、伪代码和阅读进度保存到飞书"
+  default_prompt: "使用 $agent-study 开始今天的 Agent 应用开发学习。"

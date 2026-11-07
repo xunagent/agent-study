@@ -1,0 +1,10 @@
+{
+  "level": "概念入门，尚未实现 Agent",
+  "goal": "系统理解 Agent 应用开发，并将学到的方法用于自己的项目",
+  "language": "zh-CN",
+  "timezone": "Asia/Shanghai",
+  "reading_minutes": 10,
+  "topics": ["执行循环", "工具调用", "上下文管理", "记忆与检索", "规划与长任务", "多 Agent 协作", "评测", "工程可靠性"],
+  "products": ["Codex", "Claude Code", "Agent SDKs"],
+  "schedule": {"enabled": false, "time": "09:00", "notification": "host"}
+}
