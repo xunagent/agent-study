@@ -43,8 +43,8 @@ metadata:
    返回 `resume_publication` 时，运行 `resume <operation>` 恢复云端原始草稿，不重新选题或生成草稿。
 2. 返回 `select_material` 时，读 [research.md](references/research.md)。围绕当前主题筛选最多 12 个候选，深入检查最多 3 个，最终选一个。需要切换路线时说明理由，使用 `topic`，保留未读记录。重要新进展可以插入，但仍受未读门槛约束。
 3. 按 [lesson-format.md](references/lesson-format.md) 生成完整学习 JSON，写在私有状态目录，运行 `validate`。不要把真实配置、草稿、缓存写进安装仓库。
-4. 检查事实、证据、图示和伪代码一致后，将 `reviewed` 设为 true，运行 `publish`。脚本失败时读 [recovery.md](references/recovery.md)，保留原 JSON 并恢复同一文档。
-5. 打开返回的 `diagram_previews`，确认文字和连线清晰。返回标题、推荐原因、飞书链接。若视觉检查不通过，说明该篇待修复，不宣称验收完成。
+4. 读 [diagram-style.md](references/diagram-style.md)，默认用宿主图像生成能力制作白底淡彩蜡笔手绘图，保留完整 prompt。逐项核对箭头，不能只检查美观。检查事实、证据、图示和伪代码一致后，将 `reviewed` 设为 true，运行 `publish`，再按该参考用 `illustrate.py` 替换结构图。脚本失败时读 [recovery.md](references/recovery.md)，保留原 JSON 并恢复同一文档。
+5. 下载实际写入的图片并检查文字、连线及图片指纹。返回标题、推荐原因、飞书链接。若视觉检查不通过，说明该篇待修复，不宣称验收完成。宿主不能生成图片时，说明限制并取得用户对替代图的选择，不静默交付普通方框图。
 6. 如配置了宿主通知，用其既有渠道；可选飞书通知见 [setup.md](references/setup.md)。发布和通知分开，通知失败不重新生成文章。
 
 阅读建议默认中文约 1500～2500 字、10 分钟；尊重用户语言与时长设置。示例 JSON 仅演示结构，不能代替每天取得的证据或当作最新材料。

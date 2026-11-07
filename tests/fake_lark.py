@@ -86,6 +86,11 @@ class FakeLark:
                 d["nodes"][index + 1:index + 1] = incoming
             elif command == "block_replace":
                 d["nodes"][index:index + 1] = incoming
+            elif command == "block_move_after":
+                moving = next(n for n in d['nodes'] if n.get('block-id') == kwargs['src_block_ids'])
+                d['nodes'].remove(moving)
+                index = next(i for i, n in enumerate(d['nodes']) if n.get('block-id') == kwargs['block_id'])
+                d['nodes'].insert(index + 1, moving)
             else:
                 raise AssertionError(command)
         d["revision"] += 1

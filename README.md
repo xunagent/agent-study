@@ -2,7 +2,7 @@
 
 每天围绕一个问题学习 Agent 应用开发：论文、官方文档、工程博客或开源模块，生成中文原理讲解、流程图和伪代码，保存到自己的飞书学习库。
 
-**当前为 0.1.0-alpha。** 已在 Codex 中完成真实个人飞书建库、论文发布、图示回读、中断恢复和新本地目录恢复；27 个自动测试通过。Claude Code 实测因宿主登录过期未完成，其他验证边界见 [验证范围](references/verification.md)。
+**当前为 0.1.0-alpha。** 已在 Codex 中完成真实个人飞书建库、论文发布、图示回读、中断恢复和新本地目录恢复；31 个自动测试通过。Claude Code 实测因宿主登录过期未完成，其他验证边界见 [验证范围](references/verification.md)。
 
 ## 使用方式
 
@@ -30,6 +30,8 @@ python3 ~/.codex/skills/agent-study/scripts/study.py doctor
 Claude Code 可安装到 `~/.claude/skills/agent-study`。其他遵循 [Agent Skills 规范](https://agentskills.io/specification) 的宿主按各自目录规则安装；规范兼容不代表已完成实测。重启或刷新宿主的 Skill 列表后调用。
 
 首次使用由 Skill 问答配置。真实配置和草稿保存在仓库外，凭据由 lark-cli 管理。完整步骤见 [初始化与恢复](references/setup.md)。
+
+流程图默认使用宿主图像生成能力，采用白底、石墨线条与淡彩蜡笔手绘风格，中文标签。保留结构化图源和生成提示词；发布前逐条核对连线。成品为位图，不能逐个编辑节点。没有图像生成能力的宿主会说明限制，由用户选择替代方式。详见 [绘图与发布](references/diagram-style.md)。
 
 ## 数据与调度
 
