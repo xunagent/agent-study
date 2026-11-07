@@ -184,6 +184,7 @@ def diagram_svg(graph: dict) -> str:
     positions = {n["id"]: i * 116 + 35 for i, n in enumerate(nodes)}
     order = {n["id"]: i for i, n in enumerate(nodes)}
     for i, edge in enumerate(graph["edges"]):
+        left_label = False
         start, end = edge["from"], edge["to"]
         y1, y2 = positions[start] + 32, positions[end] + 32
         if order[end] == order[start] + 1:
@@ -195,7 +196,8 @@ def diagram_svg(graph: dict) -> str:
                 lane = 155 - (i % 3) * 42
                 points = f'210,{y1} {lane},{y1} {lane},{y2} 210,{y2}'
                 arrow = f'202,{y2-6} 210,{y2} 202,{y2+6}'
-                tx, ty = lane + 6, (y1 + y2) / 2
+                tx, ty = lane - 6, (y1 + y2) / 2
+                left_label = True
             else:
                 lane = 650 + (i % 3) * 48
                 points = f'590,{y1} {lane},{y1} {lane},{y2} 590,{y2}'
@@ -203,7 +205,14 @@ def diagram_svg(graph: dict) -> str:
                 tx, ty = lane + 6, (y1 + y2) / 2
         pieces.append(f'<polyline points="{points}" fill="none" stroke="#526882" stroke-width="2"/>')
         pieces.append(f'<polyline points="{arrow}" fill="none" stroke="#526882" stroke-width="2"/>')
-        pieces.append(f'<text x="{tx}" y="{ty}" fill="#405571" font-size="14">{escape(edge.get("label", ""))}</text>')
+        label = edge.get("label", "")
+        available = tx - 12 if left_label else 888 - tx
+        columns = max(1, int(available / 14))
+        for offset in range(0, len(label), columns):
+            line = label[offset:offset + columns]
+            x = tx - len(line) * 14 if left_label else tx
+            y = ty + (offset // columns) * 18
+            pieces.append(f'<text x="{x}" y="{y}" fill="#405571" font-size="14">{escape(line)}</text>')
     for i, node in enumerate(nodes):
         y = positions[node["id"]]
         pieces.append(f'<rect x="210" y="{y}" width="380" height="64" rx="12" fill="#e6efff" stroke="#6393ce"/>')

@@ -266,9 +266,12 @@ class Engine:
         if day in state["daily"]:
             item = state["materials"][state["daily"][day]]
             return {"action": "already_generated_today", "title": item["title"], "url": item["doc"]["url"]}
+        readings = [{"material_id": k, "title": v["title"], "version": v["version"],
+                     "status": self.status_value(v)[0]} for k, v in state["materials"].items()]
         return {"action": "select_material", "topic": state["topic"] or config["topics"][0],
                 "config": config, "candidates": list(state["candidates"].values())[:12],
-                "studied": [{"material_id": k, "title": v["title"], "version": v["version"]} for k, v in state["materials"].items()],
+                "studied": [m for m in readings if m["status"] == "已读"],
+                "other_readings": [m for m in readings if m["status"] != "已读"],
                 "limits": {"screen": 12, "inspect": 3, "publish": 1}}
 
     def candidate(self, candidate):
@@ -385,8 +388,11 @@ class Engine:
             raise StudyError("No matching published material")
         current, part = self.status_value(material)
         if current != status:
-            self.write(material["doc"]["token"], paragraph(status), command="block_replace",
-                               block_id=material["status_block"], revision_id=part.get("revision_id", -1))
+            try:
+                self.write(material["doc"]["token"], paragraph(status), command="block_replace",
+                           block_id=material["status_block"], revision_id=part.get("revision_id", -1))
+            except RemoteError:
+                pass  # A lost response can still have replaced the block; read back below.
             # block_replace may allocate a new block ID. Resolve only the status section.
             section = self.remote.section(material["doc"]["token"], "阅读状态")
             nodes = [n for n in xml_root(section["content"]).iter("p") if node_text(n).strip() == status]
@@ -453,7 +459,11 @@ class Engine:
         if not config:
             return
         materials = list(state["materials"].values())
+        current = state["materials"].get(state["current"])
         payloads = {
+            "home": ("<h2>当前学习</h2><p>" + link(current["doc"]["url"], current["title"]) + "</p>" +
+                     paragraph("阅读状态以笔记顶部为准。未读期间复用当前篇；读完后告诉 Agent 继续学习。")
+                     if current else paragraph("学习库已就绪，向 Agent 说：开始今天的学习。")),
             "config": json_block(config),
             "route": paragraph(" → ".join(config["topics"]) + "\n当前主题：" + (state["topic"] or config["topics"][0]) + "\n已读仅表示完成阅读，不代表掌握。根据前置知识讨论后调整路线。"),
             "materials": "".join("<p>" + link(m["doc"]["url"], m["title"]) + "</p>" + paragraph(m["material_id"] + " · " + m["version"]) for m in materials) or paragraph("尚无已发布材料"),
@@ -471,13 +481,18 @@ class Engine:
 
     def review(self, topic):
         """Return reading content only; never include the reflections/discussion sections."""
-        items = [m for m in self.state()["materials"].values() if topic in m["topics"]]
+        state = self.state()
+        items = [m for m in state["materials"].values() if topic in m["topics"]]
         result = []
         for m in items:
             status, _ = self.status_value(m)
             if status != "已读":
                 continue
-            sections = {h: self.remote.section(m["doc"]["token"], h)["content"] for h in ("核心观点", "解决方案", "证据与边界", "工程启发")}
+            sections = {}
+            for heading in ("核心观点", "解决方案", "证据与边界", "工程启发"):
+                updated = "更新 " + m["version"] + " · " + heading
+                anchor = updated if (m["operation"], updated) in state["parts"] else heading
+                sections[heading] = self.remote.section(m["doc"]["token"], anchor)["content"]
             result.append({"title": m["title"], "url": m["doc"]["url"], "source": m["source"], "sections": sections})
         return {"topic": topic, "materials": result}
 

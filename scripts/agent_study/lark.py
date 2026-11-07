@@ -119,14 +119,25 @@ class Lark:
 
     def preview(self, token, directory: Path):
         directory.mkdir(parents=True, exist_ok=True)
-        name = "board-" + digest(token) + ".png"
+        # Feishu chooses PNG or JPEG. A forced .png rejects valid JPEG exports.
+        name = "board-" + digest(token)
         command = ["lark-cli"] + (["--profile", self.profile] if self.profile else [])
         command += ["whiteboard", "+export", "--whiteboard-token", token, "--output-type", "preview", "--output", "./" + name, "--overwrite", "--as", "user", "--format", "json"]
         try:
             result = subprocess.run(command, cwd=directory, capture_output=True, text=True, timeout=self.timeout)
         except subprocess.TimeoutExpired as exc:
             raise RemoteError("Diagram preview timed out; resume publication") from exc
-        path = directory / name
-        if result.returncode or not path.exists() or path.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
+        try:
+            response = json.loads(result.stdout)
+            output = response["data"]["preview_image_path"]
+            path = (directory / output).resolve()
+        except (ValueError, KeyError, TypeError) as exc:
+            raise RemoteError("Diagram export response has no usable image path; resume publication") from exc
+        if path.parent != directory.resolve():
+            raise RemoteError("Diagram export path escaped its private preview directory")
+        if result.returncode or response.get("ok") is not True or not path.is_file():
+            raise RemoteError("Diagram preview unavailable; publication remains incomplete")
+        header = path.read_bytes()[:8]
+        if not (header == b"\x89PNG\r\n\x1a\n" or header.startswith(b"\xff\xd8\xff")):
             raise RemoteError("Diagram preview unavailable; publication remains incomplete")
         return str(path)

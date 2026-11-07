@@ -163,7 +163,27 @@ class WorkflowTests(unittest.TestCase):
         future = datetime.now(timezone.utc) + timedelta(days=1)
         with patch.object(module, "datetime") as clock:
             clock.now.return_value = future
-            self.assertEqual(self.engine.daily()["action"], "select_material")
+            result = self.engine.daily()
+            self.assertEqual(result["action"], "select_material")
+            self.assertEqual(result["studied"], [])
+            self.assertEqual(result["other_readings"][0]["status"], "已跳过")
+
+    def test_status_response_loss_recovers_new_block_id(self):
+        self.publish()
+        self.remote.fail_update_after = "已读"
+        self.engine.set_status("已读")
+        item = next(iter(self.engine.state()["materials"].values()))
+        self.assertEqual(self.engine.status_value(item)[0], "已读")
+
+    def test_review_reads_content_matching_latest_version(self):
+        self.publish()
+        updated = copy.deepcopy(self.lesson)
+        updated["source"]["version"] = "v4"
+        updated["sections"]["solution"] = "NEW_VERSION_MECHANISM"
+        self.engine.publish(updated, "specified")
+        self.engine.set_status("已读")
+        result = self.engine.review("执行循环")
+        self.assertIn("NEW_VERSION_MECHANISM", result["materials"][0]["sections"]["解决方案"])
 
     def test_abstract_only_is_candidate(self):
         self.lesson["source"]["reading_scope"] = "abstract"
