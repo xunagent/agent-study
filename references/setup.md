@@ -17,6 +17,12 @@ lark-cli auth status --json --verify
 
 展示账户名称和目标个人目录，由用户确定。配置登录凭证由 CLI 自己保管；不复制到 Skill、Git 或学习文档。仅在缺少权限时申请需要的 docs/drive 权限，画板预览所需权限按 CLI 错误补充。所有资源操作以 `--as user` 执行。授权 URL/二维码使用 CLI 当次输出，遵循其 split-flow，不循环发起授权。
 
+若授权页提示“没有应用的使用权限”，这是应用可用范围问题，重复补 scope 无法解决。已有工作账号配置时，先 `lark-cli profile list`，为个人账号创建独立命名配置：`lark-cli config init --new --name agent-study-personal --brand feishu`。不要执行会替换已有配置的无名称初始化，也不要切换全局默认账号。
+
+若网页显示创建成功但回传链接失效，复用已创建应用。用户可在自己的终端运行 `python3 scripts/bind_profile.py --profile agent-study-personal --app-id <已创建应用ID>`，将 App Secret 粘贴到隐藏输入框，不要发到聊天或写进配置文件。脚本通过 stdin 交给官方 CLI 保存。
+
+第一次运行学习命令时显式指定 `python3 scripts/study.py --profile agent-study-personal init ...`。此选择会保存到私有本地状态，之后 daily 等命令自动沿用。新设备恢复时重新选定本机 profile，云端不保存本机账号配置。
+
 ## 初次问答
 
 每轮最多询问 2～3 个相关问题，普通对话即可，不依赖某宿主独有问答工具。已有答案沿用。收集：

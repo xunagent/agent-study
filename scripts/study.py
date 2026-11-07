@@ -62,7 +62,8 @@ def main(argv=None):
         Path(args.output).write_text(diagram_svg(value["diagram"]), encoding="utf-8")
         return {"svg": str(Path(args.output).resolve())}
     local = Local(args.state_dir)
-    engine = Engine(Lark(args.profile), local)
+    profile = args.profile or local.read().get("lark_profile")
+    engine = Engine(Lark(profile), local)
     def execute():
         if cmd == "init": return engine.init(args.folder, read_json(args.config))
         if cmd == "restore": return engine.restore(args.homepage)
@@ -81,6 +82,10 @@ def main(argv=None):
         if cmd == "schedule-prompt": return engine.schedule_prompt()
         raise StudyError("Unknown command")
     with local.lock():
+        if args.profile:
+            saved = local.read()
+            saved["lark_profile"] = args.profile
+            local.write(saved)
         if cmd in ("daily", "restore", "questions", "review", "schedule-prompt", "init"):
             return execute()
         with engine.writer():
