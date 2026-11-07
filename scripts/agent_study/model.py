@@ -223,15 +223,18 @@ def diagram_svg(graph: dict) -> str:
 def lesson_parts(lesson: dict) -> list[tuple[str, str]]:
     source = lesson["source"]
     info = paragraph(lesson["summary"]) + "<p>" + link(source["url"], source["title"]) + "</p>"
-    info += paragraph(f'{source["authors"]} · {source["kind"]} · {source["version"]}\n读取于 {source["accessed_at"]} · {source["locator"]}\n主题 {" / ".join(lesson["topics"])}')
+    kinds = {'paper': '论文', 'official_doc': '官方文档', 'official_blog': '工程博客', 'source_code': '源码'}
+    info += paragraph(f'{source["authors"]} · {kinds[source["kind"]]} · {source["version"]} · {" / ".join(lesson["topics"])}')
     parts = [("材料信息", info)]
     for key in ("why", "problem", "claims", "solution"):
         parts.append((SECTIONS[key], paragraph(lesson["sections"][key])))
-    parts.append(("流程图", '<whiteboard type="svg">' + diagram_svg(lesson["diagram"]) + '</whiteboard>' + code_block(json.dumps(lesson["diagram"], ensure_ascii=False, indent=2, sort_keys=True), "json")))
+    parts.append(("流程图", '<whiteboard type="svg">' + diagram_svg(lesson["diagram"]) + '</whiteboard>'))
     pseudo = lesson["pseudocode"]
     parts.append(("框架伪代码", paragraph(pseudo["basis"] + "\n" + pseudo["explanation"]) + code_block(pseudo["code"], "python")))
     for key in ("evidence", "application"):
         parts.append((SECTIONS[key], paragraph(lesson["sections"][key])))
-    citations = "".join("<p>" + link(r["url"], r["locator"]) + "</p>" + paragraph(r["basis"] + " · " + r["claim"]) for r in lesson["references"])
+    bases = {'author_claim': '作者主张', 'reported_evidence': '原文实验', 'implementation': '源码事实', 'inference': '讲解推断'}
+    citations = paragraph(f'材料版本：{source["version"]}；资料查阅日期：{source["accessed_at"]}；依据范围：{source["locator"]}')
+    citations += "".join("<p>" + link(r["url"], r["locator"]) + "</p>" + paragraph(bases[r["basis"]] + " · " + r["claim"]) for r in lesson["references"])
     parts.append(("证据定位", citations))
     return parts

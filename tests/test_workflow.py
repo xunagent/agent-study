@@ -51,7 +51,7 @@ class WorkflowTests(unittest.TestCase):
     def test_create_timeout_adopts_remote_document(self):
         self.remote.fail_create_after = True
         self.publish()
-        self.assertEqual(len(self.remote.docs), 8)
+        self.assertEqual(len(self.remote.docs), 9)
 
     def test_section_response_loss_is_reconciled(self):
         self.remote.fail_update_after = "教学场景"
@@ -64,7 +64,7 @@ class WorkflowTests(unittest.TestCase):
         self.remote.fail_update_before = "教学场景"
         with self.assertRaises(StudyError): self.publish()
         self.publish()
-        self.assertEqual(len(self.remote.docs), 8)
+        self.assertEqual(len(self.remote.docs), 9)
 
     def test_diagram_failure_resumes_without_duplicate(self):
         self.remote.fail_preview = True
@@ -83,13 +83,13 @@ class WorkflowTests(unittest.TestCase):
         pending = restored.daily()
         self.assertEqual(pending["action"], "resume_publication")
         self.assertEqual(restored.resume(pending["operation"])["action"], "published")
-        self.assertEqual(len(self.remote.docs), 8)
+        self.assertEqual(len(self.remote.docs), 9)
 
     def test_index_failure_resumes(self):
         self.remote.fail_update_before = "arxiv:2210.03629"
         with self.assertRaises(RemoteError): self.publish()
         self.publish()
-        self.assertEqual(len(self.remote.docs), 8)
+        self.assertEqual(len(self.remote.docs), 9)
 
     def test_user_content_preserved_and_not_read(self):
         self.publish()
@@ -112,7 +112,7 @@ class WorkflowTests(unittest.TestCase):
         new["source"]["url"] = "https://arxiv.org/abs/2210.03629v4"
         result = self.engine.publish(new, "specified")
         self.assertEqual(first["url"], result["url"])
-        self.assertEqual(len(self.remote.docs), 8)
+        self.assertEqual(len(self.remote.docs), 10)
         doc = next(iter(self.engine.state()["materials"].values()))["doc"]["token"]
         self.assertIn("核心观点", self.remote.section(doc, "核心观点")["content"])
         self.assertIn("更新 v4", self.remote.section(doc, "更新 v4 · 核心观点")["content"])
@@ -192,6 +192,43 @@ class WorkflowTests(unittest.TestCase):
             value, part = self.engine.status_value(material)
             self.assertEqual(value, requested)
             self.assertEqual(len(list(xml_root(part['content']).iter('checkbox'))), 1)
+
+    def test_clean_layout_keeps_provenance_out_of_main_diagram(self):
+        self.publish()
+        item = next(iter(self.engine.state()['materials'].values()))
+        doc = item['doc']['token']
+        self.assertEqual(self.remote.docs[doc]['meta']['name'], self.lesson['title'])
+        info = self.remote.section(doc, '材料信息')['content']
+        self.assertNotIn(self.lesson['source']['accessed_at'], info)
+        self.assertNotIn('<pre', self.remote.section(doc, '流程图')['content'])
+        source = next(e['payload']['source'] for e in self.engine.events() if e['kind']=='diagram_source')
+        self.assertIn(source['url'], self.remote.section(doc, '证据定位')['content'])
+        self.assertIn('nodes', self.remote.fetch(source['token'])['content'])
+
+    def test_renamed_interrupted_note_recovers_by_cloud_identity(self):
+        self.remote.fail_preview = True
+        with self.assertRaises(RemoteError): self.publish()
+        note = next(e['payload']['doc'] for e in self.engine.events() if e['kind']=='created' and not e['payload']['operation'].startswith(('system:', 'diagram-source:')))
+        self.remote.docs[note['token']]['meta']['name'] = 'User changed title'
+        restored = Engine(self.remote, Local(Path(self.temp.name)/'another-device'))
+        restored.restore(self.engine.doc('home')['url'])
+        self.remote.fail_preview = False
+        result = restored.resume(restored.daily()['operation'])
+        self.assertEqual(result['url'], note['url'])
+        self.assertEqual(len(self.remote.docs), 9)
+
+    def test_manual_widget_progress_preserves_widget_and_recovers(self):
+        self.publish()
+        item = next(iter(self.engine.state()['materials'].values()))
+        node = next(n for n in self.remote.docs[item['doc']['token']]['nodes'] if n.get('block-id')==item['status_block'])
+        node.tag = 'readonly-block'; node.text = None; node.set('type', 'isv')
+        self.engine.use_manual_status()
+        self.assertEqual(self.engine.daily()['status'], '待学习')
+        self.engine.set_status('已读')
+        self.assertEqual(node.tag, 'readonly-block')
+        restored = Engine(self.remote, Local(Path(self.temp.name)/'manual-restored'))
+        restored.restore(self.engine.doc('home')['url'])
+        self.assertEqual(restored.status_value(next(iter(restored.state()['materials'].values())))[0], '已读')
 
     def test_status_response_loss_recovers_new_block_id(self):
         self.publish()

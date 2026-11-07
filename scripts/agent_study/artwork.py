@@ -18,12 +18,17 @@ def replace_artwork(engine, doc, heading, image_bytes, prompt,
     if not (image_bytes.startswith(b'\x89PNG\r\n\x1a\n') or image_bytes.startswith(b'\xff\xd8\xff')):
         raise StudyError("Use a reviewed PNG or JPEG image")
     record = {"agent_study_artwork": 1, "sha256": fingerprint, "prompt": prompt}
+    sources = [e['payload']['source'] for e in engine.events() if e['kind'] == 'diagram_source' and e['payload']['doc'] == doc]
+    if not sources:
+        raise StudyError('Create the diagram source document before replacing artwork')
+    source_doc = sources[-1]
 
     def inspect():
         section = engine.remote.section(doc, heading)
         root = xml_root(section['content'])
         records = []
-        for pre in root.iter('pre'):
+        source_root = xml_root(engine.remote.fetch(source_doc['token'])['content'])
+        for pre in source_root.iter('pre'):
             try:
                 value = json.loads(node_text(pre))
             except ValueError:
@@ -31,7 +36,8 @@ def replace_artwork(engine, doc, heading, image_bytes, prompt,
             if isinstance(value, dict) and value.get('agent_study_artwork') == 1:
                 records.append(value)
         images = [n for n in root.iter('img') if media_token(n) == image_token]
-        if record in records and len(images) == 1:
+        old_still_present = any(block_id(n) == expected_block for n in root.iter())
+        if record in records and len(images) == 1 and not old_still_present:
             return section, root, images[0]
         return section, root, None
 
@@ -55,9 +61,16 @@ def replace_artwork(engine, doc, heading, image_bytes, prompt,
         if not any(block_id(n) == uploaded_block and media_token(n) == image_token
                    for n in xml_root(moved['content']).iter('img')):
             raise StudyError('Image move incomplete; preserve the old diagram and inspect before retrying')
-        content = '<h2>图示生成提示词</h2>' + code_block(json.dumps(record, ensure_ascii=False, indent=2), 'json')
+        source_content = engine.remote.fetch(source_doc['token'])['content']
+        if fingerprint not in source_content:
+            try:
+                engine.write(source_doc['token'], code_block(json.dumps(record, ensure_ascii=False, indent=2), 'json'))
+            except RemoteError:
+                pass
+        if fingerprint not in engine.remote.fetch(source_doc['token'])['content']:
+            raise StudyError('Generation record was not saved; preserve the old diagram')
         try:
-            engine.write(doc, content, command='block_replace', block_id=expected_block,
+            engine.write(doc, '', command='block_delete', block_id=expected_block,
                          revision_id=moved['revision_id'])
         except RemoteError:
             pass  # Resolve a lost response from the scoped remote section, never blind retry.

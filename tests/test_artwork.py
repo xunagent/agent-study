@@ -37,6 +37,7 @@ class ArtworkTests(unittest.TestCase):
         self.uploaded = block_id(self.remote.docs[self.doc]['nodes'][-1])
         self.section = self.remote.section(self.doc, '流程图')
         self.block = block_id(next(xml_root(self.section['content']).iter('whiteboard')))
+        self.source = self.engine.diagram_source({'token': self.doc}, 'fixture', {'graph': 'GRAPH_SOURCE'}, 'fixture')
 
     def replace(self, **overrides):
         args = dict(engine=self.engine, doc=self.doc, heading='流程图',
@@ -55,6 +56,8 @@ class ArtworkTests(unittest.TestCase):
         nodes = self.remote.docs[self.doc]['nodes']
         self.assertEqual(sum(n.tag == 'img' for n in nodes), 1)
         self.assertIn('GRAPH_SOURCE', ''.join(node_text(n) for n in nodes if n.tag == 'pre'))
+        self.assertNotIn('agent_study_artwork', ''.join(node_text(n) for n in nodes))
+        self.assertIn('Exact nodes and edges', self.remote.fetch(self.source['token'])['content'])
         self.assertEqual(nodes[-1].text, 'USER_TEXT')
         self.assertTrue(all('USER_TEXT' not in ''.join(r[2]) for r in self.remote.reads))
 

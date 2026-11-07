@@ -86,6 +86,8 @@ class FakeLark:
                 d["nodes"][index + 1:index + 1] = incoming
             elif command == "block_replace":
                 d["nodes"][index:index + 1] = incoming
+            elif command == 'block_delete':
+                del d['nodes'][index]
             elif command == "block_move_after":
                 moving = next(n for n in d['nodes'] if n.get('block-id') == kwargs['src_block_ids'])
                 d['nodes'].remove(moving)

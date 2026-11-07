@@ -10,7 +10,7 @@ from html import escape
 from zoneinfo import ZoneInfo
 
 from .lark import RemoteError, block_id, json_values, node_text, xml_root
-from .model import (StudyError, STATUSES, digest, json_block, lesson_parts, link,
+from .model import (StudyError, STATUSES, digest, json_block, code_block, lesson_parts, link,
                     paragraph, source_identity, validate_config, validate_lesson)
 
 
@@ -147,15 +147,30 @@ class Engine:
                 state["materials"][p["material_id"]]["status"] = p["status"]
             elif kind == "status_block" and p["material_id"] in state["materials"]:
                 state["materials"][p["material_id"]]["status_block"] = p["status_block"]
+            elif kind == "status_binding" and p["material_id"] in state["materials"]:
+                state["materials"][p["material_id"]].update(p)
         return state
 
     def ensure_doc(self, title, content, operation):
         self.check_writer()
-        matches = [d for d in self.remote.list_docs(self.binding["folder"]) if d["name"] == title]
+        files = self.remote.list_docs(self.binding['folder'])
+        saved = self.local.pending(operation) or {}
+        events = self.events() if 'journal' in self.binding['docs'] else []
+        known = next((e['payload']['doc'] for e in events if e['kind'] == 'created' and e['payload']['operation'] == operation), saved.get('doc'))
+        if known:
+            found = next((d for d in files if d['token'] == known['token']), None)
+            if not found:
+                raise StudyError('Previously created document is missing; do not recreate it automatically')
+            return known
+        matches = [d for d in files if d["name"] == title]
         if len(matches) > 1:
             raise StudyError("Duplicate remote document titles detected; reconcile them before continuing: " + title)
         if matches:
+            if not operation.startswith('system:') and not saved and not any(e['kind'] == 'intent' and e['payload']['operation'] == operation for e in events):
+                raise StudyError('An unrelated document already has this title; choose a distinct descriptive title')
             self.local.pending(operation, {"doc": matches[0], "phase": "created"})
+            if 'journal' in self.binding['docs']:
+                self.event('created', {'operation': operation, 'doc': matches[0]}, 'created:' + operation)
             return matches[0]
         pending = self.local.pending(operation)
         if pending:
@@ -175,7 +190,19 @@ class Engine:
                 raise
             doc = matches[0]
         self.local.pending(operation, {"doc": doc, "phase": "created"})
+        if 'journal' in self.binding['docs']:
+            self.event('created', {'operation': operation, 'doc': doc}, 'created:' + operation)
         return doc
+
+    def diagram_source(self, doc, title, graph, operation):
+        existing = next((e['payload']['source'] for e in self.events() if e['event_id'] == 'diagram-source:' + operation), None)
+        if existing:
+            return existing
+        source = self.ensure_doc(title + ' · 图示源文件',
+            '<h1>结构化图源</h1>' + code_block(json.dumps(graph, ensure_ascii=False, indent=2), 'json') +
+            '<h1>生成记录</h1>', 'diagram-source:' + operation)
+        self.event('diagram_source', {'doc': doc['token'], 'operation': operation, 'source': source}, 'diagram-source:' + operation)
+        return source
 
     def init(self, folder, config):
         config = validate_config(config)
@@ -267,10 +294,22 @@ class Engine:
         return config
 
     def status_value(self, material):
+        if material.get('status_mode') == 'manual':
+            return material.get('status', '待学习'), {'content': '', 'status_source': 'conversation'}
         # Fetch exactly the stored status paragraph, never the full learning document.
         part = self.remote.fetch(material["doc"]["token"], scope="range",
                                  start_block_id=material["status_block"], end_block_id=material["status_block"], max_depth=0)
         return read_status(part['content']), part
+
+    def use_manual_status(self, identity=None):
+        state = self.state()
+        identity = identity or state['current']
+        material = state['materials'].get(identity)
+        if not material:
+            raise StudyError('No matching published material')
+        self.event('status_binding', {'material_id': identity, 'status_mode': 'manual'})
+        return {'status_mode': 'manual', 'url': material['doc']['url'],
+                'message': 'Progress changes only when the user explicitly confirms it in conversation; widget clicks are not inferred'}
 
     def daily(self):
         state = self.state()
@@ -378,16 +417,18 @@ class Engine:
             if missing:
                 self.write(doc["token"], "".join("<h1>" + escape(h) + "</h1>" for h in missing))
         else:
-            title = lesson["title"] + " [as-" + digest(identity)[:12] + "]"
-            skeleton = "<h1>阅读状态</h1>" + status_checkbox('待学习')
-            skeleton += "".join("<h1>" + escape(h) + "</h1>" for h, _ in parts)
+            title = lesson["title"]
+            skeleton = '<h1>材料信息</h1>' + parts[0][1] + status_checkbox('待学习')
+            skeleton += "".join("<h1>" + escape(h) + "</h1>" for h, _ in parts[1:])
             skeleton += "<h1>我的疑问与感悟</h1><p></p><h1>AI 讨论记录</h1><p></p>"
             doc = self.ensure_doc(title, skeleton, operation)
-            section = self.remote.section(doc["token"], "阅读状态")
+            section = self.remote.section(doc["token"], "材料信息")
             nodes = status_nodes(section['content'])
             if len(nodes) != 1 or not block_id(nodes[0]):
                 raise StudyError("Reading status block missing; inspect the existing document")
             status_block = block_id(nodes[0])
+        source_doc = self.diagram_source(doc, lesson['title'] + ' · ' + version, lesson['diagram'], operation)
+        parts = [(h, c + ('<p>' + link(source_doc['url'], '图示源文件与生成提示词') + '</p>' if h.endswith('证据定位') else '')) for h, c in parts]
         previews = []
         for heading, content in parts:
             result = self.fill_part(doc, heading, content, operation)
@@ -397,6 +438,7 @@ class Engine:
                  "topics": lesson["topics"], "source": lesson["source"], "status_block": status_block,
                  "status": old.get("status", "待学习") if old else "待学习", "mode": mode, "day": day,
                  "recommendation": lesson["recommendation"], "operation": operation}
+        entry['status_section'] = old.get('status_section', '阅读状态') if old else '材料信息'
         self.event("published", entry, "published:" + operation)
         self.event("current", {"material_id": identity}, "current:" + operation)
         self.sync_indexes()
@@ -410,6 +452,10 @@ class Engine:
         material = state["materials"].get(identity)
         if not material:
             raise StudyError("No matching published material")
+        if material.get('status_mode') == 'manual':
+            self.event('status', {'material_id': identity, 'status': status})
+            self.sync_indexes()
+            return {'status': status, 'url': material['doc']['url'], 'status_source': 'conversation'}
         current, part = self.status_value(material)
         if current != status or not list(xml_root(part['content']).iter('checkbox')):
             try:
@@ -418,7 +464,7 @@ class Engine:
             except RemoteError:
                 pass  # A lost response can still have replaced the block; read back below.
             # block_replace may allocate a new block ID. Resolve only the status section.
-            section = self.remote.section(material["doc"]["token"], "阅读状态")
+            section = self.remote.section(material["doc"]["token"], material.get('status_section', '阅读状态'))
             nodes = status_nodes(section['content'])
             if len(nodes) != 1 or not block_id(nodes[0]) or read_status(section['content']) != status:
                 raise StudyError("Status write could not be verified")

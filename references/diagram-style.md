@@ -33,7 +33,7 @@ crossings through boxes, or text covered by arrows. Accuracy over decoration.
 
 目前采用两步发布：`study.py publish` 建立正文和结构图；随后用 `illustrate.py` 替换图示块。第二步及图片回读完成前，不向用户宣称图示验收完成。两步之间会短暂显示结构图。
 
-1. `python3 <skill>/scripts/illustrate.py` 仅读取当前篇的流程图节；可用 `--material <id>` 指定笔记。检查图源与生成图一致，取得目标文档 token。
+1. `study.py publish` 会建立独立图示源文件并在文末链接。`python3 <skill>/scripts/illustrate.py` 仅读取当前篇的流程图节；可用 `--material <id>` 指定笔记。结合独立源文件中的图源检查生成图，取得目标文档 token。
 2. 先上传成品，使用相同个人 profile，在图片所在目录运行 `lark-cli docs +media-insert --doc <doc> --file ./image.png --width 800 --as user --format json`。立即将返回的 `block_id` / `file_token` 保存到私有恢复记录。此步骤把图片临时追加到文末，不读取个人区域。若请求超时且未知上传结果，停止盲目重试，先核实已有上传；不要重复创建图片。
 3. 上传后再次运行 `illustrate.py`，取得当前旧视觉块 ID 和最新 `revision_id`，再发布：
 
@@ -44,7 +44,7 @@ python3 <skill>/scripts/illustrate.py \
   --uploaded-block <block_id> --image-token <file_token> --reviewed
 ```
 
-脚本先验证上传的图片块、移动到流程图节并回读，然后才移除指定旧视觉块并保存 prompt。保留相邻 JSON 图源、正文与个人记录。显式 `--state-dir` / `--profile` 同主脚本。完成后的重试使用相同文件和参数：回读已生效结果，不重复插图。若移动中断或版本冲突，保留已上传图片，重新检查现有块和版本后继续，不重新上传。
+脚本先验证上传的图片块、移动到流程图节并回读，将 prompt 和指纹保存到独立源文件并核实，然后才移除指定旧视觉块。正文不插入 prompt 或指纹，保留正文与个人记录。显式 `--state-dir` / `--profile` 同主脚本。完成后的重试使用相同文件和参数：回读已生效结果，不重复插图。若移动中断或版本冲突，保留已上传图片，重新检查现有块和版本后继续，不重新上传。
 
 4. 用官方 `lark-cli docs +media-download --token <image_token> --output ./readback.png --as user` 下载到私有目录。命令使用相同个人 profile。核对下载图与本地成品的 SHA-256，并打开图片确认可读，才交付文档链接。失败时修复现有图，不重建整篇。
 
