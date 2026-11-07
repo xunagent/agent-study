@@ -152,8 +152,10 @@ class WorkflowTests(unittest.TestCase):
         self.publish()
         material = next(iter(self.engine.state()["materials"].values()))
         status = next(n for n in self.remote.docs[material["doc"]["token"]]["nodes"] if n.get("block-id") == material["status_block"])
-        status.text = "已跳过"
+        status.set('done', 'true')
         self.assertEqual(self.engine.daily()["action"], "already_generated_today")
+        status.set('done', 'false')
+        self.assertEqual(self.engine.daily()['status'], '待学习')
 
     def test_after_read_next_day_allows_selection(self):
         from unittest.mock import patch
@@ -167,6 +169,29 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(result["action"], "select_material")
             self.assertEqual(result["studied"], [])
             self.assertEqual(result["other_readings"][0]["status"], "已跳过")
+
+    def test_legacy_status_migrates_to_clickable_checkbox(self):
+        self.publish()
+        material = next(iter(self.engine.state()['materials'].values()))
+        node = next(n for n in self.remote.docs[material['doc']['token']]['nodes'] if n.get('block-id') == material['status_block'])
+        node.tag = 'p'
+        node.attrib.pop('done', None)
+        node.text = '待学习'
+        self.assertEqual(self.engine.daily()['status'], '待学习')
+        self.engine.set_status('待学习')
+        material = next(iter(self.engine.state()['materials'].values()))
+        value, part = self.engine.status_value(material)
+        self.assertEqual(value, '待学习')
+        self.assertEqual(len(list(xml_root(part['content']).iter('checkbox'))), 1)
+
+    def test_conversation_statuses_keep_checkbox_semantics(self):
+        self.publish()
+        for requested in ('阅读中', '已跳过', '已读', '待学习'):
+            self.engine.set_status(requested)
+            material = next(iter(self.engine.state()['materials'].values()))
+            value, part = self.engine.status_value(material)
+            self.assertEqual(value, requested)
+            self.assertEqual(len(list(xml_root(part['content']).iter('checkbox'))), 1)
 
     def test_status_response_loss_recovers_new_block_id(self):
         self.publish()

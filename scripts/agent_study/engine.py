@@ -44,6 +44,33 @@ def text_fingerprint(content):
     return re.sub(r"\s+", "", node_text(root))
 
 
+def status_checkbox(status):
+    label = "已读" if status in ("待学习", "已读") else "已读（当前：" + status + "）"
+    return '<checkbox done="' + ('true' if status == '已读' else 'false') + '">' + label + '</checkbox>'
+
+
+def status_nodes(content):
+    return [n for n in xml_root(content).iter() if
+            (n.tag == 'p' and node_text(n).strip() in STATUSES) or
+            (n.tag == 'checkbox' and node_text(n).strip() in ('已读', '已读（当前：阅读中）', '已读（当前：已跳过）'))]
+
+
+def read_status(content):
+    nodes = status_nodes(content)
+    if len(nodes) != 1:
+        raise StudyError('Reading status is missing or ambiguous; inspect the status block')
+    node = nodes[0]
+    label = node_text(node).strip()
+    if node.tag == 'p':
+        return label
+    checked = node.get('done')
+    if checked not in ('true', 'false'):
+        raise StudyError('Checkbox completion value is missing or unsupported')
+    if checked == 'true':
+        return '已读'
+    return {'已读': '待学习', '已读（当前：阅读中）': '阅读中', '已读（当前：已跳过）': '已跳过'}[label]
+
+
 class Engine:
     def __init__(self, remote, local):
         self.remote, self.local = remote, local
@@ -243,10 +270,7 @@ class Engine:
         # Fetch exactly the stored status paragraph, never the full learning document.
         part = self.remote.fetch(material["doc"]["token"], scope="range",
                                  start_block_id=material["status_block"], end_block_id=material["status_block"], max_depth=0)
-        statuses = [node_text(n).strip() for n in xml_root(part["content"]).iter("p")]
-        if len(statuses) != 1 or statuses[0] not in STATUSES:
-            raise StudyError("Reading status was removed or changed to an unsupported value; restore the status paragraph")
-        return statuses[0], part
+        return read_status(part['content']), part
 
     def daily(self):
         state = self.state()
@@ -355,12 +379,12 @@ class Engine:
                 self.write(doc["token"], "".join("<h1>" + escape(h) + "</h1>" for h in missing))
         else:
             title = lesson["title"] + " [as-" + digest(identity)[:12] + "]"
-            skeleton = "<h1>阅读状态</h1><p>待学习</p>"
+            skeleton = "<h1>阅读状态</h1>" + status_checkbox('待学习')
             skeleton += "".join("<h1>" + escape(h) + "</h1>" for h, _ in parts)
             skeleton += "<h1>我的疑问与感悟</h1><p></p><h1>AI 讨论记录</h1><p></p>"
             doc = self.ensure_doc(title, skeleton, operation)
             section = self.remote.section(doc["token"], "阅读状态")
-            nodes = [n for n in xml_root(section["content"]).iter("p") if node_text(n).strip() in STATUSES]
+            nodes = status_nodes(section['content'])
             if len(nodes) != 1 or not block_id(nodes[0]):
                 raise StudyError("Reading status block missing; inspect the existing document")
             status_block = block_id(nodes[0])
@@ -387,16 +411,16 @@ class Engine:
         if not material:
             raise StudyError("No matching published material")
         current, part = self.status_value(material)
-        if current != status:
+        if current != status or not list(xml_root(part['content']).iter('checkbox')):
             try:
-                self.write(material["doc"]["token"], paragraph(status), command="block_replace",
+                self.write(material["doc"]["token"], status_checkbox(status), command="block_replace",
                            block_id=material["status_block"], revision_id=part.get("revision_id", -1))
             except RemoteError:
                 pass  # A lost response can still have replaced the block; read back below.
             # block_replace may allocate a new block ID. Resolve only the status section.
             section = self.remote.section(material["doc"]["token"], "阅读状态")
-            nodes = [n for n in xml_root(section["content"]).iter("p") if node_text(n).strip() == status]
-            if len(nodes) != 1 or not block_id(nodes[0]):
+            nodes = status_nodes(section['content'])
+            if len(nodes) != 1 or not block_id(nodes[0]) or read_status(section['content']) != status:
                 raise StudyError("Status write could not be verified")
             if block_id(nodes[0]) != material["status_block"]:
                 material = {**material, "status_block": block_id(nodes[0])}
